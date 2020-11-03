@@ -33,7 +33,7 @@ for subfolder in subfolders:
         tmp = path.name.split(".")
         if int(tmp[0].split("-")[1]) != imgID:
             # print(imgID, imgTimestamp)
-            tmpDict[nbRGB] = {"id": imgID, "RGBTimestamp": imgTimestamp}
+            tmpDict[nbRGB] = {"id": imgID, "RGBPath": path}
             nbRGB = nbRGB + 1
         imgID = int(tmp[0].split("-")[1])
         imgTimestamp = int(tmp[1].split("-")[0])
@@ -55,7 +55,7 @@ for subfolder in subfolders:
         tmp = path.name.split(".")
         if int(tmp[0].split("-")[1]) != imgID:
             # print(imgID, imgTimestamp)
-            tmpDict[nbDepth] = {"id": imgID, "DepthTimestamp": imgTimestamp}
+            tmpDict[nbDepth] = {"id": imgID, "DepthPath": path}
             nbDepth = nbDepth + 1
         imgID = int(tmp[0].split("-")[1])
         imgTimestamp = int(tmp[1].split("-")[0])
