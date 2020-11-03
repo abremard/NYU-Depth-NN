@@ -1,11 +1,12 @@
 # import tensorflow as tf
-# from tensorflow import keras
+from tensorflow import keras
 from random import random
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from pathlib import Path
 import os
+import sys
 import pandas as pd
 
 import cv2
@@ -14,60 +15,123 @@ from PIL import Image
 # rgbimg.paste(img)
 # rgbimg.save('foo.jpg')
 
-baseURL = "../NYU Data/living_rooms_part1"
+baseURL = "D:/NYU Data/nyu_depth_v2_raw"
 
 subfolders = [ f.path for f in os.scandir(baseURL) if f.is_dir() ]
 
 nbRGB = 0
 imgID = 0
+RGBPath = ""
 imgTimestamp = 0
+nbDepth = 0
+imgID = 0
+imgTimestamp = 0
+depthPath = ""
 
 RGBDF = pd.DataFrame()
 DepthDF = pd.DataFrame()
 
-tmpDict = {}
+tmpRGBDict = {}
+tmpDepthDict = {}
 
 # RGB files
-for subfolder in subfolders:
+for idx, subfolder in enumerate(subfolders):
+    print("Scanning "+subfolder+"...")
     for path in Path(subfolder).rglob('*.ppm'):
         tmp = path.name.split(".")
         if int(tmp[0].split("-")[1]) != imgID:
             # print(imgID, imgTimestamp)
-            tmpDict[nbRGB] = {"id": imgID, "RGBTimestamp": imgTimestamp}
+            tmpRGBDict[nbRGB] = {"id": imgID, "RGBTimestamp": imgTimestamp, "RGBPath": RGBPath}
             nbRGB = nbRGB + 1
         imgID = int(tmp[0].split("-")[1])
         imgTimestamp = int(tmp[1].split("-")[0])
-
-tmpDF = pd.DataFrame.from_dict(tmpDict, "index")
-RGBDF = RGBDF.append(tmpDF)
-
-print(RGBDF)
-
-nbDepth = 0
-imgID = 0
-imgTimestamp = 0
-
-tmpDict = {}
-
-# Depth files
-for subfolder in subfolders:
+        RGBPath = path
     for path in Path(subfolder).rglob('*.pgm'):
         tmp = path.name.split(".")
         if int(tmp[0].split("-")[1]) != imgID:
             # print(imgID, imgTimestamp)
-            tmpDict[nbDepth] = {"id": imgID, "DepthTimestamp": imgTimestamp}
+            tmpDepthDict[nbDepth] = {"id": imgID, "DepthTimestamp": imgTimestamp, "DepthPath": depthPath}
             nbDepth = nbDepth + 1
         imgID = int(tmp[0].split("-")[1])
         imgTimestamp = int(tmp[1].split("-")[0])
+        depthPath = str(path).replace('\\','/')
 
-tmpDF = pd.DataFrame.from_dict(tmpDict, "index")
+tmpDF = pd.DataFrame.from_dict(tmpRGBDict, "index")
+RGBDF = RGBDF.append(tmpDF)
+tmpDF = pd.DataFrame.from_dict(tmpDepthDict, "index")
 DepthDF = DepthDF.append(tmpDF)
 
-print(DepthDF)
-
 JoinDF = pd.merge(DepthDF, RGBDF, on='id')
+JoinDF = JoinDF.iloc[1:]
 
-print(JoinDF)
+JoinDF.to_csv("JoinDF.csv")
+
+train = []
+train_label = []
+
+for index, row in JoinDF.iterrows():
+    imRGB = mpimg.imread(row["RGBPath"])
+    imDepth = cv2.imread(row["DepthPath"],-1)
+    if imRGB is None or imDepth is None or imRGB.shape == () or imDepth.shape == ():
+        continue
+    train.append(imRGB)
+    train_label.append(imDepth)
+    # fig = plt.figure()
+    # a = fig.add_subplot(2, 2, 1)
+    # plt.imshow(imDepth)
+    # a.set_title('Depth')
+    # a = fig.add_subplot(2, 2, 2)
+    # plt.imshow(imRGB)
+    # a.set_title('RGB')
+    # print(imDepth.shape, imRGB.shape)
+    # plt.show()
+    if index == 2000:
+        break
+
+print(np.shape(train), np.shape(train_label))
+
+# MODEL
+# UTILITY FUNCTIONS
+
+def add_batch_norm(mod):
+    return mod.add(keras.layers.BatchNormalization())
+
+def add_conv(mod, kernel, filters, strides = 1):
+    return mod.add(keras.layers.Conv2D(filters= filters, kernel_size= kernel, strides= strides))
+
+def add_max_pooling(mod, kernel, strides = 1):
+    return mod.add(keras.layers.MaxPooling2D(pool_size=kernel, strides = strides))
+
+def add_relu(mod):
+    return mod.add(keras.layers.ReLu())
+
+def add_projection(mod,entry,exit):
+    left = mod.add()
+
+    right = mod.add()
+    return 
+
+# BUILD
+# We're not using Sequential as it prevents res net skip connection
+# https://stackoverflow.com/questions/42384602/implementing-skip-connections-in-keras
+model = keras.layers.Input(shape(480,640,3))
+model.add(
+    keras.layers.Conv2D(
+        filters=64,
+        kernel_size=7,
+        strides=2,
+    )
+)
+
+
+
+
+
+
+
+# print(JoinDF)
+
+# JoinDF.to_csv('JoinDF.csv')
 
 # print(nbDepth)
 
