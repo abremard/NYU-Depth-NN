@@ -15,7 +15,7 @@ from PIL import Image
 # rgbimg.paste(img)
 # rgbimg.save('foo.jpg')
 
-baseURL = "D:/NYU Data/nyu_depth_v2_raw"
+baseURL = "H:/NYU Data/nyu_depth_v2_raw"
 
 subfolders = [ f.path for f in os.scandir(baseURL) if f.is_dir() ]
 
@@ -35,47 +35,52 @@ tmpRGBDict = {}
 tmpDepthDict = {}
 
 # RGB files
-for idx, subfolder in enumerate(subfolders):
-    print("Scanning "+subfolder+"...")
-    for path in Path(subfolder).rglob('*.ppm'):
-        tmp = path.name.split(".")
-        if int(tmp[0].split("-")[1]) != imgID:
-            # print(imgID, imgTimestamp)
-            tmpRGBDict[nbRGB] = {"id": imgID, "RGBTimestamp": imgTimestamp, "RGBPath": RGBPath}
-            nbRGB = nbRGB + 1
-        imgID = int(tmp[0].split("-")[1])
-        imgTimestamp = int(tmp[1].split("-")[0])
-        RGBPath = path
-    for path in Path(subfolder).rglob('*.pgm'):
-        tmp = path.name.split(".")
-        if int(tmp[0].split("-")[1]) != imgID:
-            # print(imgID, imgTimestamp)
-            tmpDepthDict[nbDepth] = {"id": imgID, "DepthTimestamp": imgTimestamp, "DepthPath": depthPath}
-            nbDepth = nbDepth + 1
-        imgID = int(tmp[0].split("-")[1])
-        imgTimestamp = int(tmp[1].split("-")[0])
-        depthPath = str(path).replace('\\','/')
+# for idx, subfolder in enumerate(subfolders):
+#     print("Scanning "+subfolder+"...")
+#     for path in Path(subfolder).rglob('*.ppm'):
+#         tmp = path.name.split(".")
+#         if int(tmp[0].split("-")[1]) != imgID:
+#             # print(imgID, imgTimestamp)
+#             tmpRGBDict[nbRGB] = {"id": imgID, "RGBTimestamp": imgTimestamp, "RGBPath": RGBPath}
+#             nbRGB = nbRGB + 1
+#         imgID = int(tmp[0].split("-")[1])
+#         imgTimestamp = int(tmp[1].split("-")[0])
+#         RGBPath = path
+#     for path in Path(subfolder).rglob('*.pgm'):
+#         tmp = path.name.split(".")
+#         if int(tmp[0].split("-")[1]) != imgID:
+#             # print(imgID, imgTimestamp)
+#             tmpDepthDict[nbDepth] = {"id": imgID, "DepthTimestamp": imgTimestamp, "DepthPath": depthPath}
+#             nbDepth = nbDepth + 1
+#         imgID = int(tmp[0].split("-")[1])
+#         imgTimestamp = int(tmp[1].split("-")[0])
+#         depthPath = str(path).replace('\\','/')
 
-tmpDF = pd.DataFrame.from_dict(tmpRGBDict, "index")
-RGBDF = RGBDF.append(tmpDF)
-tmpDF = pd.DataFrame.from_dict(tmpDepthDict, "index")
-DepthDF = DepthDF.append(tmpDF)
+# tmpDF = pd.DataFrame.from_dict(tmpRGBDict, "index")
+# RGBDF = RGBDF.append(tmpDF)
+# tmpDF = pd.DataFrame.from_dict(tmpDepthDict, "index")
+# DepthDF = DepthDF.append(tmpDF)
 
-JoinDF = pd.merge(DepthDF, RGBDF, on='id')
-JoinDF = JoinDF.iloc[1:]
+# JoinDF = pd.merge(DepthDF, RGBDF, on='id')
+# JoinDF = JoinDF.iloc[1:]
 
-JoinDF.to_csv("JoinDF.csv")
+# JoinDF.to_csv("JoinDF.csv")
 
-train = []
-train_label = []
+JoinDF = pd.read_csv("JoinDF.csv")
+
+dataSize = 100
+
+train = np.zeros((dataSize, 480, 640, 3))
+train_label = np.zeros((dataSize, 480, 640, 1))
 
 for index, row in JoinDF.iterrows():
-    imRGB = mpimg.imread(row["RGBPath"])
-    imDepth = cv2.imread(row["DepthPath"],-1)
-    if imRGB is None or imDepth is None or imRGB.shape == () or imDepth.shape == ():
+    imRGB = mpimg.imread(row["RGBPath"].replace("D:", "H:"))
+    imDepth = cv2.imread(row["DepthPath"].replace("D:", "H:"),-1)
+    imDepthe = cv2.imread(row["DepthPath"].replace("D:", "H:"),cv2.IMREAD_GRAYSCALE).reshape((480,640,1))
+    if imRGB is None or imDepthe is None or imRGB.shape == () or imDepthe.shape == ():
         continue
-    train.append(imRGB)
-    train_label.append(imDepth)
+    train[index] = imRGB
+    train_label[index] = imDepthe
     # fig = plt.figure()
     # a = fig.add_subplot(2, 2, 1)
     # plt.imshow(imDepth)
@@ -85,7 +90,7 @@ for index, row in JoinDF.iterrows():
     # a.set_title('RGB')
     # print(imDepth.shape, imRGB.shape)
     # plt.show()
-    if index == 2000:
+    if index == dataSize - 1:
         break
 
 print(np.shape(train), np.shape(train_label))
@@ -93,11 +98,11 @@ print(np.shape(train), np.shape(train_label))
 # MODEL
 # UTILITY FUNCTIONS
 
-def add_batch_norm(mod):
-    return mod.add(keras.layers.BatchNormalization())
-
 def add_conv(mod, kernel, filters, strides = 1):
     return mod.add(keras.layers.Conv2D(filters= filters, kernel_size= kernel, strides= strides))
+
+def add_batch_norm(mod):
+    return mod.add(keras.layers.BatchNormalization())
 
 def add_max_pooling(mod, kernel, strides = 1):
     return mod.add(keras.layers.MaxPooling2D(pool_size=kernel, strides = strides))
@@ -111,18 +116,67 @@ def add_projection(mod,entry,exit):
     right = mod.add()
     return 
 
+x_train = train[:80]
+y_train = train_label[:80]
+x_test = train[81:]
+y_test = train_label[81:]
+
+print(np.shape(x_train), np.shape(y_train))
+
 # BUILD
 # We're not using Sequential as it prevents res net skip connection
 # https://stackoverflow.com/questions/42384602/implementing-skip-connections-in-keras
-model = keras.layers.Input(shape(480,640,3))
-model.add(
-    keras.layers.Conv2D(
-        filters=64,
-        kernel_size=7,
-        strides=2,
-    )
-)
+# model = keras.layers.Input(shape = (480,640,3))
+# model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+# model.add(keras.layers.MaxPooling2D((2, 2), padding='same'))
+# model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+# model.add(keras.layers.MaxPooling2D((2, 2), padding='same'))
+# model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+# model.add(keras.layers.UpSampling2D((2, 2), padding='same'))
+# model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+# model.add(keras.layers.UpSampling2D((2, 2), padding='same'))
+# model.add(keras.layers.Conv2D(1, (3, 3), activation='sigmoid', padding='same'))
 
+input_img = keras.Input((480, 640, 3))
+
+x = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
+x = keras.layers.MaxPooling2D((2, 2), padding='same')(x)
+x = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+encoded = keras.layers.MaxPooling2D((2, 2), padding='same')(x)
+x = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(encoded)
+x = keras.layers.UpSampling2D((2, 2))(x)
+x = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+x = keras.layers.UpSampling2D((2, 2))(x)
+decoded = keras.layers.Conv2D(1, (3, 3), activation='relu', padding='same')(x)
+
+model = keras.Model(input_img, decoded)
+
+model.summary()
+
+model.compile(optimizer='adam', loss='binary_crossentropy')
+
+# x_train = x_train.reshape(-1, 480, 640, 3)
+# y_train = y_train.reshape(-1, 480, 640, 3)
+# x_test = x_test.reshape(-1, 480, 640, 1)
+# y_test = y_test.reshape(-1, 480, 640, 1)
+
+print(np.shape(x_train))
+print(np.shape(y_train))
+
+model.fit(x_train, y_train,
+                epochs=100,
+                batch_size=128,
+                shuffle=True,
+                validation_data=(x_test, y_test)
+                )
+
+# model.add(
+#     keras.layers.Conv2D(
+#         filters=64,
+#         kernel_size=7,
+#         strides=2,
+#     )
+# )
 
 
 
