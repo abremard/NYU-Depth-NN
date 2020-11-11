@@ -69,31 +69,40 @@ tmpDepthDict = {}
 
 JoinDF = pd.read_csv("JoinDF.csv")
 
-dataSize = 100
+dataSize = 1000
+trainSize = 800
 
 train = np.zeros((dataSize, 60, 80, 3))
 train_label = np.zeros((dataSize, 60, 80, 1))
 
-for index, row in JoinDF.iterrows():
+index = 0
+
+for cursor, row in JoinDF.iterrows():
     imRGB = Image.open(row["RGBPath"].replace("D:", "H:"))
     imRGB = imRGB.resize((80, 60), Image.ANTIALIAS)
     imDepth = cv2.imread(row["DepthPath"].replace("D:", "H:"),cv2.IMREAD_GRAYSCALE)
-    imDepth = cv2.resize(imDepth, dsize=(80, 60), interpolation=cv2.INTER_CUBIC)
-    imDepth = imDepth.reshape((60,80,1))
-    if imRGB is None or imDepth is None or imRGB.size == () or imDepth.size == ():
-        continue
-    train[index] = imRGB
-    train_label[index] = imDepth
-    # fig = plt.figure()
-    # a = fig.add_subplot(2, 2, 1)
-    # plt.imshow(imDepth)
-    # a.set_title('Depth')
-    # a = fig.add_subplot(2, 2, 2)
-    # plt.imshow(imRGB)
-    # a.set_title('RGB')
-    # plt.show()
+    try:
+        imDepth = cv2.resize(imDepth, dsize=(80, 60), interpolation=cv2.INTER_CUBIC)
+        imDepth = imDepth.reshape((60,80,1))
+        if imRGB is None or imDepth is None or imRGB.size == () or imDepth.size == ():
+            continue
+        train[index] = imRGB
+        train_label[index] = imDepth
+        # fig = plt.figure()
+        # a = fig.add_subplot(2, 2, 1)
+        # plt.imshow(imDepth)
+        # a.set_title('Depth')
+        # a = fig.add_subplot(2, 2, 2)
+        # plt.imshow(imRGB)
+        # a.set_title('RGB')
+        # plt.show()
+        index = index + 1
+    except:
+        break
+
     if index == dataSize - 1:
         break
+
 
 print(np.shape(train), np.shape(train_label))
 
@@ -118,10 +127,10 @@ def add_projection(mod,entry,exit):
     right = mod.add()
     return 
 
-x_train = train[:80]
-y_train = train_label[:80]
-x_test = train[81:]
-y_test = train_label[81:]
+x_train = train[:trainSize]
+y_train = train_label[:trainSize]
+x_test = train[trainSize+1:]
+y_test = train_label[trainSize+1:]
 
 print(np.shape(x_train), np.shape(y_train))
 
@@ -155,7 +164,7 @@ model = keras.Model(input_img, decoded)
 
 model.summary()
 
-model.compile(optimizer='adam', loss='binary_crossentropy')
+model.compile(optimizer='adam', loss='mean_squared_error')
 
 # x_train = x_train.reshape(-1, 480, 640, 3)
 # y_train = y_train.reshape(-1, 480, 640, 3)
@@ -167,7 +176,7 @@ print(np.shape(y_train))
 
 model.fit(x_train, y_train,
                 epochs=100,
-                batch_size=128,
+                batch_size=50,
                 shuffle=True,
                 validation_data=(x_test, y_test)
                 )
