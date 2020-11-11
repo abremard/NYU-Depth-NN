@@ -8,9 +8,10 @@ from pathlib import Path
 import os
 import sys
 import pandas as pd
-
 import cv2
 from PIL import Image
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # rgbimg.paste(img)
 # rgbimg.save('foo.jpg')
@@ -70,17 +71,19 @@ JoinDF = pd.read_csv("JoinDF.csv")
 
 dataSize = 100
 
-train = np.zeros((dataSize, 480, 640, 3))
-train_label = np.zeros((dataSize, 480, 640, 1))
+train = np.zeros((dataSize, 60, 80, 3))
+train_label = np.zeros((dataSize, 60, 80, 1))
 
 for index, row in JoinDF.iterrows():
-    imRGB = mpimg.imread(row["RGBPath"].replace("D:", "H:"))
-    imDepth = cv2.imread(row["DepthPath"].replace("D:", "H:"),-1)
-    imDepthe = cv2.imread(row["DepthPath"].replace("D:", "H:"),cv2.IMREAD_GRAYSCALE).reshape((480,640,1))
-    if imRGB is None or imDepthe is None or imRGB.shape == () or imDepthe.shape == ():
+    imRGB = Image.open(row["RGBPath"].replace("D:", "H:"))
+    imRGB = imRGB.resize((80, 60), Image.ANTIALIAS)
+    imDepth = cv2.imread(row["DepthPath"].replace("D:", "H:"),cv2.IMREAD_GRAYSCALE)
+    imDepth = cv2.resize(imDepth, dsize=(80, 60), interpolation=cv2.INTER_CUBIC)
+    imDepth = imDepth.reshape((60,80,1))
+    if imRGB is None or imDepth is None or imRGB.size == () or imDepth.size == ():
         continue
     train[index] = imRGB
-    train_label[index] = imDepthe
+    train_label[index] = imDepth
     # fig = plt.figure()
     # a = fig.add_subplot(2, 2, 1)
     # plt.imshow(imDepth)
@@ -88,7 +91,6 @@ for index, row in JoinDF.iterrows():
     # a = fig.add_subplot(2, 2, 2)
     # plt.imshow(imRGB)
     # a.set_title('RGB')
-    # print(imDepth.shape, imRGB.shape)
     # plt.show()
     if index == dataSize - 1:
         break
@@ -137,7 +139,7 @@ print(np.shape(x_train), np.shape(y_train))
 # model.add(keras.layers.UpSampling2D((2, 2), padding='same'))
 # model.add(keras.layers.Conv2D(1, (3, 3), activation='sigmoid', padding='same'))
 
-input_img = keras.Input((480, 640, 3))
+input_img = keras.Input((60, 80, 3))
 
 x = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
 x = keras.layers.MaxPooling2D((2, 2), padding='same')(x)
