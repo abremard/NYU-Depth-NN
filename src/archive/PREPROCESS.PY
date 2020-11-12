@@ -1,5 +1,6 @@
 # import tensorflow as tf
 from tensorflow import keras
+from sklearn.utils import shuffle
 from random import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 # rgbimg.paste(img)
 # rgbimg.save('foo.jpg')
 
-baseURL = "H:/NYU Data/nyu_depth_v2_raw"
+baseURL = "F:/NYU Data/nyu_depth_v2_raw"
 
 subfolders = [ f.path for f in os.scandir(baseURL) if f.is_dir() ]
 
@@ -68,34 +69,37 @@ tmpDepthDict = {}
 # JoinDF.to_csv("JoinDF.csv")
 
 JoinDF = pd.read_csv("JoinDF.csv")
+# JoinDF = shuffle(JoinDF)
 
-dataSize = 1000
-trainSize = 800
+dataSize = 9000
+trainSize = 8000
 
-train = np.zeros((dataSize, 60, 80, 3))
-train_label = np.zeros((dataSize, 60, 80, 1))
+train = np.zeros((dataSize, 60, 80, 3), dtype=np.int)
+train_label = np.zeros((dataSize, 60, 80, 1), dtype=np.int)
 
 index = 0
 
 for cursor, row in JoinDF.iterrows():
-    imRGB = Image.open(row["RGBPath"].replace("D:", "H:"))
+    imRGB = Image.open(row["RGBPath"].replace("D:", "F:"))
+    test = imRGB
     imRGB = imRGB.resize((80, 60), Image.ANTIALIAS)
-    imDepth = cv2.imread(row["DepthPath"].replace("D:", "H:"),cv2.IMREAD_GRAYSCALE)
+    imDepth = cv2.imread(row["DepthPath"].replace("D:", "F:"),cv2.IMREAD_GRAYSCALE)
     try:
         imDepth = cv2.resize(imDepth, dsize=(80, 60), interpolation=cv2.INTER_CUBIC)
+        # if index == 0:
+        #     fig = plt.figure()
+        #     a = fig.add_subplot(2, 2, 1)
+        #     plt.imshow(imDepth)
+        #     a.set_title('Depth')
+        #     a = fig.add_subplot(2, 2, 2)
+        #     plt.imshow(imRGB)
+        #     a.set_title('RGB')
+        #     plt.show()
         imDepth = imDepth.reshape((60,80,1))
         if imRGB is None or imDepth is None or imRGB.size == () or imDepth.size == ():
             continue
-        train[index] = imRGB
+        train[index] = np.array(imRGB)
         train_label[index] = imDepth
-        # fig = plt.figure()
-        # a = fig.add_subplot(2, 2, 1)
-        # plt.imshow(imDepth)
-        # a.set_title('Depth')
-        # a = fig.add_subplot(2, 2, 2)
-        # plt.imshow(imRGB)
-        # a.set_title('RGB')
-        # plt.show()
         index = index + 1
     except:
         break
@@ -132,8 +136,6 @@ y_train = train_label[:trainSize]
 x_test = train[trainSize+1:]
 y_test = train_label[trainSize+1:]
 
-print(np.shape(x_train), np.shape(y_train))
-
 # BUILD
 # We're not using Sequential as it prevents res net skip connection
 # https://stackoverflow.com/questions/42384602/implementing-skip-connections-in-keras
@@ -164,7 +166,9 @@ model = keras.Model(input_img, decoded)
 
 model.summary()
 
-model.compile(optimizer='adam', loss='mean_squared_error')
+opt = keras.optimizers.Adam(learning_rate=0.00001)
+
+model.compile(optimizer=opt, loss='mean_squared_error', metrics=['accuracy'])
 
 # x_train = x_train.reshape(-1, 480, 640, 3)
 # y_train = y_train.reshape(-1, 480, 640, 3)
@@ -174,24 +178,53 @@ model.compile(optimizer='adam', loss='mean_squared_error')
 print(np.shape(x_train))
 print(np.shape(y_train))
 
-model.fit(x_train, y_train,
+history = model.fit(x_train, y_train,
                 epochs=100,
-                batch_size=50,
+                batch_size=10,
                 shuffle=True,
-                validation_data=(x_test, y_test)
+                validation_data=(x_test, y_test),
                 )
 
-# model.add(
-#     keras.layers.Conv2D(
-#         filters=64,
-#         kernel_size=7,
-#         strides=2,
-#     )
-# )
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
 
+for i in range(20):
+    imageIndex = i
+    trueImage = y_train[imageIndex]
+    trueImage = trueImage[:, :, 0]
+    modelImage = model.predict(x_train[imageIndex:imageIndex+1])
+    modelImage = modelImage[0]
+    modelImage = modelImage[:, :, 0]
 
+    fig = plt.figure()
+    a = fig.add_subplot(2, 2, 1)
+    plt.imshow(trueImage)
+    a.set_title('trueImage')
+    a = fig.add_subplot(2, 2, 2)
+    plt.imshow(modelImage)
+    a.set_title('modelImage')
+    plt.show()
 
-
+# fig = plt.figure()
+# a = fig.add_subplot(2, 2, 1)
+# plt.imshow(y_train[0][:, :, 0])
+# a.set_title('Depth')
+# a = fig.add_subplot(2, 2, 2)
+# plt.imshow(x_train[0])
+# a.set_title('RGB')
+# plt.show()
 
 
 # print(JoinDF)
