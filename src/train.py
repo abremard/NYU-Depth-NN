@@ -80,7 +80,7 @@ def fetch_images(filepath, disk_name, data_size, train_size, shuffle, width, hei
 
     return x_train, y_train, x_test, y_test
 
-def auto_encoder_v1(width, height):
+def auto_encoder_v1_0(width, height):
     """ Autoencoder version 1.0 : 2 down-convolution layers + 2 up-convolutional layers
 
     Args:
@@ -109,6 +109,42 @@ def auto_encoder_v1(width, height):
     model.compile(optimizer=opt, loss='mean_squared_error', metrics=['accuracy'])
 
     return model
+
+
+def auto_encoder_v1_1(width, height):
+    """ Autoencoder version 2.0 : 2 down-convolution layers + 2 up-convolutional layers with merge
+
+    Args:
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        model: keras model
+    """ 
+
+    # MODEL
+    input_img = keras.Input((width, height, 3))
+    x1 = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
+    x2 = keras.layers.MaxPooling2D((2, 2), padding='same')(x1)
+    x2 = keras.layers.Dropout(0.8)(x2)
+    x3 = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x2)
+    x4 = keras.layers.MaxPooling2D((2, 2), padding='same')(x3)
+    x4 = keras.layers.Dropout(0.8)(x4)
+    x5 = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x4)
+    x6 = keras.layers.UpSampling2D((2, 2))(x5)
+    x6 = keras.layers.Average()([x3, x6])
+    x7 = keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x6)
+    x8 = keras.layers.UpSampling2D((2, 2))(x7)
+    x8 = keras.layers.Average()([x1, x8])
+    decoded = keras.layers.Conv2D(1, (3, 3), activation='relu', padding='same')(x8)
+
+    model = keras.Model(input_img, decoded)
+    model.summary()
+    opt = keras.optimizers.Adam(learning_rate=0.00001)
+    model.compile(optimizer=opt, loss='mean_squared_error', metrics=['accuracy'])
+
+    return model
+
 
 def train(model, x_train, y_train, x_test, y_test, epochs, batch_size):
     """ Train any given keras model
@@ -250,7 +286,8 @@ def test():
     }
 
     x_train, y_train, x_test, y_test = fetch_images("JoinDF.csv", "F:", metadata['input_size'], metadata['train_size'], metadata['shuffle'], metadata['width'], metadata['height'])
-    model = auto_encoder_v1(metadata['width'], metadata['height'])
+    # model = auto_encoder_v1_0(metadata['width'], metadata['height'])
+    model = auto_encoder_v1_1(metadata['width'], metadata['height'])
     history = train(model, x_train, y_train, x_test, y_test, metadata['epoch'], metadata['batch_size'])
     plot(history)
     predict(model, x_train, y_train, metadata['pages'], metadata)
